@@ -144,6 +144,10 @@ static int mount_volume(const volume_t* volume, const char* node, const char* na
         }
     }
     libautomount_os_unlock();
+    if (ret == 0)
+    {
+        libautomount_os_invalidate_paths();
+    }
     return ret;
 }
 
@@ -172,6 +176,10 @@ static void release_dir(char* dir)
     if (ret != 0)
     {
         DMOD_LOG_ERROR("automount: cannot unmount %s (%d)\n", dir, ret);
+    }
+    else
+    {
+        libautomount_os_invalidate_paths();
     }
     Dmod_Free(dir);
 }

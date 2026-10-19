@@ -54,3 +54,11 @@ instead of stopped, a process exit callback unmounts.
 The host tests (`tests/libautomount_test.c` in the repository root) compile
 `libautomount_core.c` with fakes of the `libautomount_os_*()` functions -
 there is no dmvfs on the host loader.
+
+## Module search paths
+
+After each successful mount or unmount, libautomount calls
+`Dmod_InvalidateModuleSearchPaths()` outside its mount lock. This lets the
+loader lazily refresh cached paths such as `/mnt/*/bin`; failed operations
+and nodes that are not mounted do not invalidate the cache. The firmware
+must provide this dmod API (including when upgrading an existing module).

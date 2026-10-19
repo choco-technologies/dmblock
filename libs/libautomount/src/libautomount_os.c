@@ -58,3 +58,8 @@ void libautomount_os_unlock(void)
 {
     Dmod_Mutex_Unlock(g_lock);
 }
+
+void libautomount_os_invalidate_paths(void)
+{
+    Dmod_InvalidateModuleSearchPaths();
+}
