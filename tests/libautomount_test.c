@@ -30,6 +30,9 @@ typedef struct
     int     mount_calls;
     int     unmount_calls;
     int     mount_result;
+    int     unmount_result;
+    int     invalidations;
+    int     invalidations_under_lock;
     int     locked;
 } fake_tree_t;
 
@@ -78,6 +81,7 @@ int libautomount_os_mount(const char* module, const char* dir, const char* node)
 int libautomount_os_unmount(const char* dir)
 {
     g_tree.unmount_calls++;
+    if (g_tree.unmount_result != 0) return g_tree.unmount_result;
     if (strcmp(g_tree.mounted_dir, dir) != 0)
     {
         return -EINVAL;
@@ -91,6 +95,12 @@ bool libautomount_os_exists(const char* path)   { return find_dir(path) >= 0; }
 int  libautomount_os_make_dir(const char* path) { add_dir(path); return 0; }
 void libautomount_os_lock(void)                 { g_tree.locked++; }
 void libautomount_os_unlock(void)               { g_tree.locked--; }
+
+void libautomount_os_invalidate_paths(void)
+{
+    g_tree.invalidations++;
+    if (g_tree.locked) g_tree.invalidations_under_lock++;
+}
 
 static libautomount_t* create(int* error)
 {
@@ -144,7 +154,10 @@ DMOD_TEST_STEP(mounts_at_label)
     DMOD_TEST_EXPECT_EQ(strcmp(g_tree.mounted_node, IMAGE_PATH), 0);
     DMOD_TEST_EXPECT_TRUE(libautomount_os_exists(BASE_DIR));
     DMOD_TEST_EXPECT_TRUE(libautomount_os_exists(BASE_DIR "/BOOT"));
+    DMOD_TEST_EXPECT_EQ(g_tree.invalidations, 1);
     libautomount_core_unmount(mount);
+    DMOD_TEST_EXPECT_EQ(g_tree.invalidations, 2);
+    DMOD_TEST_EXPECT_EQ(g_tree.invalidations_under_lock, 0);
     DMOD_TEST_EXPECT_EQ(g_tree.unmount_calls, 1);
     DMOD_TEST_EXPECT_EQ(g_tree.mounted_dir[0], '\0');
     DMOD_TEST_EXPECT_FALSE(libautomount_os_exists(BASE_DIR "/BOOT"));
@@ -184,6 +197,7 @@ DMOD_TEST_STEP(everything_taken)
     DMOD_TEST_EXPECT_NULL(create(&error));
     DMOD_TEST_EXPECT_EQ(error, -EBUSY);
     DMOD_TEST_EXPECT_EQ(g_tree.mount_calls, 0);
+    DMOD_TEST_EXPECT_EQ(g_tree.invalidations, 0);
     DMOD_TEST_EXPECT_EQ(g_tree.locked, 0);
 }
 
@@ -194,6 +208,7 @@ DMOD_TEST_STEP(partition_table_is_left_to_the_partitions)
     DMOD_TEST_EXPECT_NULL(create(&error));
     DMOD_TEST_EXPECT_EQ(error, 0);
     DMOD_TEST_EXPECT_EQ(g_tree.mount_calls, 0);
+    DMOD_TEST_EXPECT_EQ(g_tree.invalidations, 0);
     DMOD_TEST_EXPECT_FALSE(libautomount_os_exists(BASE_DIR));
 }
 
@@ -204,6 +219,7 @@ DMOD_TEST_STEP(unknown_contents_are_not_mounted)
     DMOD_TEST_EXPECT_NULL(create(&error));
     DMOD_TEST_EXPECT_EQ(error, 0);
     DMOD_TEST_EXPECT_EQ(g_tree.mount_calls, 0);
+    DMOD_TEST_EXPECT_EQ(g_tree.invalidations, 0);
 }
 
 DMOD_TEST_STEP(dmffs_is_not_mounted)
@@ -213,6 +229,7 @@ DMOD_TEST_STEP(dmffs_is_not_mounted)
     DMOD_TEST_EXPECT_NULL(create(&error));
     DMOD_TEST_EXPECT_EQ(error, 0);
     DMOD_TEST_EXPECT_EQ(g_tree.mount_calls, 0);
+    DMOD_TEST_EXPECT_EQ(g_tree.invalidations, 0);
 }
 
 DMOD_TEST_STEP(missing_node)
@@ -221,6 +238,7 @@ DMOD_TEST_STEP(missing_node)
     DMOD_TEST_EXPECT_NULL(create(&error));
     DMOD_TEST_EXPECT_TRUE(error < 0);
     DMOD_TEST_EXPECT_EQ(g_tree.mount_calls, 0);
+    DMOD_TEST_EXPECT_EQ(g_tree.invalidations, 0);
 }
 
 DMOD_TEST_STEP(mount_failure_cleans_up)
@@ -232,6 +250,7 @@ DMOD_TEST_STEP(mount_failure_cleans_up)
     DMOD_TEST_EXPECT_EQ(error, -EIO);
     /* Not a naming problem - the node name is not tried as well */
     DMOD_TEST_EXPECT_EQ(g_tree.mount_calls, 1);
+    DMOD_TEST_EXPECT_EQ(g_tree.invalidations, 0);
     DMOD_TEST_EXPECT_FALSE(libautomount_os_exists(BASE_DIR "/DATA16"));
     DMOD_TEST_EXPECT_EQ(g_tree.locked, 0);
 }
@@ -246,6 +265,19 @@ DMOD_TEST_STEP(invalid_arguments)
     DMOD_TEST_EXPECT_NULL(libautomount_core_mount(NULL, NODE_NAME, BASE_DIR, &error));
     DMOD_TEST_EXPECT_NULL(libautomount_core_mount(IMAGE_PATH, NODE_NAME, NULL, &error));
     DMOD_TEST_EXPECT_EQ(g_tree.mount_calls, 0);
+    DMOD_TEST_EXPECT_EQ(g_tree.invalidations, 0);
     libautomount_core_unmount(NULL);
     DMOD_TEST_EXPECT_NULL(libautomount_core_get_dir(NULL));
+}
+
+DMOD_TEST_STEP(failed_unmount_does_not_invalidate)
+{
+    DMOD_TEST_EXPECT_TRUE(test_build_fat32(IMAGE_PATH));
+    libautomount_t* mount = create(NULL);
+    DMOD_TEST_EXPECT_NOT_NULL(mount);
+    DMOD_TEST_EXPECT_EQ(g_tree.invalidations, 1);
+    g_tree.unmount_result = -EIO;
+    libautomount_core_unmount(mount);
+    DMOD_TEST_EXPECT_EQ(g_tree.invalidations, 1);
+    DMOD_TEST_EXPECT_EQ(g_tree.invalidations_under_lock, 0);
 }

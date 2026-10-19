@@ -40,6 +40,9 @@ int  libautomount_os_make_dir(const char* path);
 void libautomount_os_lock(void);
 void libautomount_os_unlock(void);
 
+/** Notify the loader after a successful tree change, outside the mount lock. */
+void libautomount_os_invalidate_paths(void);
+
 /* ---- mount logic (libautomount_core.c) ---- */
 
 /**
