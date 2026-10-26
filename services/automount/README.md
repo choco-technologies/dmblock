@@ -54,9 +54,11 @@ overlaps one already in use anyway.
 
 libautomount registers a semaphore with `libsystemd_set_stop_semaphore()`: a
 stop wakes it, it unmounts and returns from `main()`. The unit sets
-`stop_timeout_ms=5000` for the unmount to write back what the file system
-still caches; if the instance has to be killed, a process exit callback
-still unmounts the volume.
+`stop_timeout_ms=60000` for the unmount to write back what the file system
+still caches - and for what libsystemd does when it hears the unmount, in this
+thread: it runs the `remove` units of its rules and stops the units that came
+from the file system, each with a timeout of its own. If the instance has to be
+killed, a process exit callback still unmounts the volume.
 
 Remove a card only after its volumes are unmounted (`service stop
 automount@<name>`): data a file system has not written back yet is lost
