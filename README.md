@@ -114,9 +114,8 @@ See [include/dmblkid.h](include/dmblkid.h) and
 
 dmblkid uses the 64-bit file API (`Dmod_FileSeek`/`Dmod_FileTell`/
 `Dmod_FileSize` 2.0, dmod#312), so the system it runs in - the firmware or
-`dmod_loader` - must be built from a dmod with those APIs. The
-`dmod_loader` in the `chocotechnologies/dmod:1.0.4` image predates them; CI
-builds one from dmod `develop` (see below).
+`dmod_loader` - must be built from a dmod with those APIs. The `dmod_loader` of the
+`chocotechnologies/dmod` image has them (the image is built from dmod `develop`).
 
 ## Building
 
@@ -148,23 +147,20 @@ GPT with only the backup header valid at the end of a 6 GiB disk, a blank
 device, a file too small for any format, damaged FAT boot sectors, and that
 probing leaves the image unchanged.
 
-They need a `dmod_loader` with the 64-bit file API:
+They need a `dmod_loader` with the 64-bit file API - the one of the `chocotechnologies/dmod` image has it:
 
 ```bash
-git clone --depth 1 -b develop https://github.com/choco-technologies/dmod.git /tmp/dmod
-cmake -S /tmp/dmod -B /tmp/dmod/build -DDMOD_MODE=DMOD_SYSTEM -DDMOD_BUILD_EXAMPLES=ON -DDMOD_BUILD_TESTS=OFF
-cmake --build /tmp/dmod/build --target dmod_loader
-
 export DMOD_DMF_DIR=$(pwd)/build/dmf
 dmf-get install -d ${DMOD_DMF_DIR}/test_dmblkid-local.dmd -y
-/tmp/dmod/build/examples/system/dmod_loader/dmod_loader build/dmf/test_dmblkid.dmf
+dmod_loader build/dmf/test_dmblkid.dmf
 
 dmf-get install -d ${DMOD_DMF_DIR}/test_dmpart-local.dmd -y
-/tmp/dmod/build/examples/system/dmod_loader/dmod_loader build/dmf/test_dmpart.dmf
+dmod_loader build/dmf/test_dmpart.dmf
 ```
 
-`ctest` runs the same; point it to that loader with
-`-DDMOD_LOADER_EXECUTABLE=/tmp/dmod/build/examples/system/dmod_loader/dmod_loader`.
+`ctest` runs the same (it takes `dmod_loader` from the `PATH`). Outside the image build one from dmod `develop`
+(`git clone --recursive`: dmod keeps its compression library in a submodule) and point `ctest` to it with
+`-DDMOD_LOADER_EXECUTABLE=<dmod>/build/examples/system/dmod_loader/dmod_loader`.
 
 ## Documentation
 
